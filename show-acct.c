@@ -16,6 +16,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <string.h>
 #include <memory.h>
@@ -41,7 +42,8 @@ struct myacct {
   char ac_version;
   long ac_uid;					// userID
   unsigned long ac_btime, ac_utime, ac_stime, ac_etime, ac_endtime;  // creation, user, system and elapsed times
-  long ac_mem, ac_exitcode;
+  long ac_mem;
+  u_int32_t ac_exitcode;
   char ac_comm[ACCT_COMM+1];
 } ;
 
@@ -57,7 +59,7 @@ double 			comp_t_2_double(comp_t c_num);
 int		     	printusage();
 int			acct2myacct(union acctunion *ptr_acct_union, struct myacct *ptr_myacct);
 int		opt_t=1, opt_d=0, opt_f=0, opt_H=1, opt_n=0, opt_o=0, opt_D=0, 
-                opt_0=0, opt_u=0, opt_v=0, opt_e=-1, opt_T=0;
+                opt_0=0, opt_u=0, opt_v=0, opt_e=0, opt_T=0;
 
 long clocks;
 
@@ -81,6 +83,8 @@ int main(int argc, char *argv[])
   int 		length; 
   long          ac_utime, ac_stime, ac_etime, ac_mem;
 
+  if (opt_D)
+    printf("DEBUG: Beginning\n");
   acctfilename=NULL;
   outfilename=NULL;
   clocks=sysconf(_SC_CLK_TCK);
@@ -94,7 +98,7 @@ int main(int argc, char *argv[])
 		if (optarg)
 		  delimiter=optarg[0];
                 break;
-      case 'D': opt_D=1;	// debug
+      case 'D': opt_D++;	// debug
                 break;
       case 'f': opt_f=1;	// input file
 		length=strlen(optarg);
@@ -252,17 +256,20 @@ int main(int argc, char *argv[])
   begintime_tm=malloc(sizeof(struct tm));
   endtime_tm=malloc(sizeof(struct tm));
 
+  if (opt_D)
+  { printf("DEBUG: mallocs done\n");
+    printf("Sizeof struct myacct: %ld\n",(sizeof(struct myacct)));
+    printf("Sizeof struct tm: %ld\n",(sizeof(struct tm)));
+  }
+
   while (length=fread(ptr_acct_union,sizeof(struct acct),1,acctfile) > 0)
   { 
     if (opt_D > 1)
-      printf("DEBUG: Read a record.  length=%d\n",length);
-
-    if (opt_D > 1)
-      printf("DEBUG: About to try acct2myacct\n");
+      printf("DEBUG: Read %d record(s)\n",length);
 
     acct2myacct(ptr_acct_union,ptr_myacct);
 
-    if ( ((int) (ptr_myacct->ac_utime) > opt_0) && (ptr_myacct->ac_exitcode > opt_e))
+    if ( ((int) (ptr_myacct->ac_utime) > opt_0) && (ptr_myacct->ac_exitcode >= opt_e))
     { 
       temp=ptr_myacct->ac_btime;      // "temp" is only used here
       if (opt_D)
@@ -293,6 +300,9 @@ int main(int argc, char *argv[])
         }
       }
 
+      if (opt_D)
+        printf("DEBUG: Formatting area\n");
+
       if (opt_t)
       { if (opt_u)
           fprintf(outfile,"%-8s ",pw_name);
@@ -313,7 +323,11 @@ int main(int argc, char *argv[])
         ////fprintf(outfile,"%6d ",(ptr_myacct->ac_stime));
         ////fprintf(outfile,"%11d ",(ptr_myacct->ac_etime));
         fprintf(outfile,"%11ld ",ptr_myacct->ac_mem);
-        fprintf(outfile,"%8lu",(unsigned long) (ptr_myacct->ac_exitcode));
+	if (opt_D)
+	  printf("DEBUG: Before exitcode\n");
+        fprintf(outfile,"%8u", (ptr_myacct->ac_exitcode));
+	if (opt_D)
+	  printf("DEBUG: After exitcode\n");
 	fprintf(outfile," ");
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & AXSIG) ? 'X' : '-');
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & ACORE) ? 'C' : '-');
@@ -341,7 +355,7 @@ int main(int argc, char *argv[])
         //fprintf(outfile,"%d%c",(ptr_myacct->ac_stime),delimiter);
         //fprintf(outfile,"%d%c",(ptr_myacct->ac_etime),delimiter);
         fprintf(outfile,"%ld%c",ptr_myacct->ac_mem,delimiter);
-        fprintf(outfile,"%ldu%c",ptr_myacct->ac_exitcode,delimiter);
+        fprintf(outfile,"%u%c",(ptr_myacct->ac_exitcode),delimiter);
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & AFORK) ? 'F' : '-');	// Executed fork but did not exec
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & ASU) ? 'S' : '-');		// User super-user privileges
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & AXSIG) ? 'X' : '-');	// Was killed by a signal
@@ -420,6 +434,8 @@ int acct2myacct(union acctunion *ptr_acct_union, struct myacct *ptr_myacct)
 
     if (ptr_acct_union->acctv2.ac_version == 2)
     {
+      if (opt_D > 1)
+        printf("DEBUG: converting to myacct from version 2\n");
       ptr_myacct->ac_utime=compt2ulong(ptr_acct_union->acctv2.ac_utime);
       ptr_myacct->ac_stime=compt2ulong(ptr_acct_union->acctv2.ac_stime);
       ptr_myacct->ac_etime=compt2ulong(ptr_acct_union->acctv2.ac_etime);
@@ -430,10 +446,12 @@ int acct2myacct(union acctunion *ptr_acct_union, struct myacct *ptr_myacct)
       ptr_myacct->ac_mem=compt2ulong(ptr_acct_union->acctv2.ac_mem);
       ptr_myacct->ac_exitcode=ptr_acct_union->acctv2.ac_exitcode;
       ptr_myacct->ac_uid=ptr_acct_union->acctv2.ac_uid;
-      strcpy(ptr_myacct->ac_comm,ptr_acct_union->acctv2.ac_comm);
+      strncpy(ptr_myacct->ac_comm,ptr_acct_union->acctv2.ac_comm,ACCT_COMM+1);
     }
     if (ptr_acct_union->acctv2.ac_version == 3)
     {
+      if (opt_D > 1)
+        printf("DEBUG: converting to myacct from version 3\n");
       ptr_myacct->ac_utime=compt2ulong(ptr_acct_union->acctv3.ac_utime);
       ptr_myacct->ac_stime=compt2ulong(ptr_acct_union->acctv3.ac_stime);
       //ptr_myacct->ac_etime=compt2ulong(ptr_acct_union->acctv3.ac_etime);
@@ -445,14 +463,9 @@ int acct2myacct(union acctunion *ptr_acct_union, struct myacct *ptr_myacct)
       ptr_myacct->ac_mem=compt2ulong(ptr_acct_union->acctv3.ac_mem);
       ptr_myacct->ac_exitcode=(ptr_acct_union->acctv3).ac_exitcode;
       ptr_myacct->ac_uid=(ptr_acct_union->acctv3).ac_uid;
-      strcpy(ptr_myacct->ac_comm,ptr_acct_union->acctv3.ac_comm);
+      strncpy(ptr_myacct->ac_comm,ptr_acct_union->acctv3.ac_comm,ACCT_COMM+1);
     }
     ptr_myacct->ac_endtime=ptr_myacct->ac_btime+(ptr_myacct->ac_etime/clocks);
 
-
-    if (opt_D)
-    { //printf("\nDEBUG: ac_endtime: %lu, ac_btime: %lu, ac_etime: %lu\n",ptr_myacct->ac_endtime,ptr_myacct->ac_btime,ptr_myacct->ac_etime);
-      //printf("\nDEBUG: btime: %s, endtime: %s\n",asctime(ptr_myacct->ac_btime),asctime(ptr_myacct->ac_endtime));
-    }
     return(ptr_acct_union->acctv2.ac_version);
 }
