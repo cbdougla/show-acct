@@ -325,7 +325,7 @@ int main(int argc, char *argv[])
         fprintf(outfile,"%11ld ",ptr_myacct->ac_mem);
 	if (opt_D)
 	  printf("DEBUG: Before exitcode\n");
-        fprintf(outfile,"%8u", (ptr_myacct->ac_exitcode));
+        fprintf(outfile,"%8u", (ptr_myacct->ac_exitcode) >> 8);
 	if (opt_D)
 	  printf("DEBUG: After exitcode\n");
 	fprintf(outfile," ");
@@ -355,7 +355,7 @@ int main(int argc, char *argv[])
         //fprintf(outfile,"%d%c",(ptr_myacct->ac_stime),delimiter);
         //fprintf(outfile,"%d%c",(ptr_myacct->ac_etime),delimiter);
         fprintf(outfile,"%ld%c",ptr_myacct->ac_mem,delimiter);
-        fprintf(outfile,"%u%c",(ptr_myacct->ac_exitcode),delimiter);
+        fprintf(outfile,"%u%c",(ptr_myacct->ac_exitcode) >> 8,delimiter);
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & AFORK) ? 'F' : '-');	// Executed fork but did not exec
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & ASU) ? 'S' : '-');		// User super-user privileges
 	fprintf(outfile,"%c", (ptr_myacct->ac_flag & AXSIG) ? 'X' : '-');	// Was killed by a signal
